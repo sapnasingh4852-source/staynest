@@ -8,6 +8,8 @@ export default function Reviews({ listingId, onReviewAdded }) {
   const { user } = useAuth();
   const [reviews, setReviews] = useState([]);
   const [form, setForm] = useState({ rating: 5, comment: '' });
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ rating: 5, comment: '' });
   const [error, setError] = useState('');
 
   const load = () => api.get(`/listings/${listingId}/reviews`).then(({ data }) => setReviews(data));
@@ -28,6 +30,39 @@ export default function Reviews({ listingId, onReviewAdded }) {
     }
   };
 
+  const startEdit = (r) => {
+    setEditingId(r._id);
+    setEditForm({ rating: r.rating, comment: r.comment });
+    setError('');
+  };
+
+  const saveEdit = async (e, r) => {
+    e.preventDefault();
+    setError('');
+    try {
+      await api.put(`/listings/${listingId}/reviews/${r._id}`, editForm);
+      setEditingId(null);
+      load();
+      onReviewAdded?.();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  };
+
+  const remove = async (r) => {
+    if (!window.confirm('Delete your review?')) return;
+    setError('');
+    try {
+      await api.delete(`/listings/${listingId}/reviews/${r._id}`);
+      load();
+      onReviewAdded?.();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  };
+
+  const alreadyReviewed = reviews.some((r) => r.user?._id === user?._id);
+
   return (
     <section className="reviews">
       <h2>Reviews ({reviews.length})</h2>
@@ -38,12 +73,37 @@ export default function Reviews({ listingId, onReviewAdded }) {
             <strong>{r.user?.name}</strong>
             <span className="muted small">{formatDate(r.createdAt)}</span>
           </div>
-          <div className="stars-static">{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</div>
-          <p>{r.comment}</p>
+          {editingId === r._id ? (
+            <form className="form" onSubmit={(e) => saveEdit(e, r)}>
+              <StarRating value={editForm.rating} onChange={(rating) => setEditForm({ ...editForm, rating })} />
+              <textarea
+                required
+                value={editForm.comment}
+                onChange={(e) => setEditForm({ ...editForm, comment: e.target.value })}
+              />
+              <div className="row">
+                <button className="btn">Save</button>
+                <button type="button" className="btn btn-ghost" onClick={() => setEditingId(null)}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <>
+              <div className="stars-static">{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</div>
+              <p>{r.comment}</p>
+              {user && r.user?._id === user._id && (
+                <div className="row">
+                  <button className="btn btn-ghost" onClick={() => startEdit(r)}>Edit</button>
+                  <button className="btn btn-danger" onClick={() => remove(r)}>Delete</button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       ))}
 
-      {user && (
+      {user && !alreadyReviewed && (
         <form className="card form" onSubmit={submit}>
           <h3>Write a review</h3>
           <StarRating value={form.rating} onChange={(rating) => setForm({ ...form, rating })} />

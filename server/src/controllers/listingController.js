@@ -74,6 +74,18 @@ export const deleteListing = asyncHandler(async (req, res) => {
   res.json({ message: 'Listing deleted' });
 });
 
+const recalculateRating = async (listingId) => {
+  const listing = await Listing.findById(listingId);
+  if (!listing) return;
+  const stats = await Review.aggregate([
+    { $match: { listing: listing._id } },
+    { $group: { _id: '$listing', avg: { $avg: '$rating' }, count: { $sum: 1 } } },
+  ]);
+  listing.avgRating = stats[0] ? Math.round(stats[0].avg * 10) / 10 : 0;
+  listing.reviewCount = stats[0] ? stats[0].count : 0;
+  await listing.save();
+};
+
 // GET /api/listings/:id/reviews
 export const getReviews = asyncHandler(async (req, res) => {
   const reviews = await Review.find({ listing: req.params.id })
@@ -103,15 +115,46 @@ export const addReview = asyncHandler(async (req, res) => {
   }
 
   const review = await Review.create({ listing: listing._id, user: req.user._id, rating, comment });
-
-  // Recalculate rating
-  const stats = await Review.aggregate([
-    { $match: { listing: listing._id } },
-    { $group: { _id: '$listing', avg: { $avg: '$rating' }, count: { $sum: 1 } } },
-  ]);
-  listing.avgRating = Math.round(stats[0].avg * 10) / 10;
-  listing.reviewCount = stats[0].count;
-  await listing.save();
+  await recalculateRating(listing._id);
 
   res.status(201).json(review);
+});
+
+// PUT /api/listings/:id/reviews/:reviewId (author only)
+export const updateReview = asyncHandler(async (req, res) => {
+  const { rating, comment } = req.body;
+  const review = await Review.findOne({ _id: req.params.reviewId, listing: req.params.id });
+  if (!review) {
+    res.status(404);
+    throw new Error('Review not found');
+  }
+  if (!review.user.equals(req.user._id)) {
+    res.status(403);
+    throw new Error('You can only edit your own review');
+  }
+
+  if (rating !== undefined) review.rating = rating;
+  if (comment !== undefined) review.comment = comment;
+  await review.save();
+  await recalculateRating(review.listing);
+
+  res.json(review);
+});
+
+// DELETE /api/listings/:id/reviews/:reviewId (author only)
+export const deleteReview = asyncHandler(async (req, res) => {
+  const review = await Review.findOne({ _id: req.params.reviewId, listing: req.params.id });
+  if (!review) {
+    res.status(404);
+    throw new Error('Review not found');
+  }
+  if (!review.user.equals(req.user._id)) {
+    res.status(403);
+    throw new Error('You can only delete your own review');
+  }
+
+  await review.deleteOne();
+  await recalculateRating(review.listing);
+
+  res.json({ message: 'Review deleted' });
 });
