@@ -6,6 +6,7 @@ import ListingDetail from './pages/ListingDetail.jsx';
 import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
 import Trips from './pages/Trips.jsx';
+import Wishlist from './pages/Wishlist.jsx';
 import HostDashboard from './pages/host/HostDashboard.jsx';
 import ListingForm from './pages/host/ListingForm.jsx';
 import NotFound from './pages/NotFound.jsx';
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="/register" element={<Register />} />
           <Route element={<ProtectedRoute />}>
             <Route path="/trips" element={<Trips />} />
+            <Route path="/wishlist" element={<Wishlist />} />
           </Route>
           <Route element={<ProtectedRoute hostOnly />}>
             <Route path="/host" element={<HostDashboard />} />
