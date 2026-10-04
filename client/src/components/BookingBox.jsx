@@ -15,7 +15,14 @@ export default function BookingBox({ listing }) {
   const total = nights * listing.pricePerNight;
   const set = (key) => (e) => setForm({ ...form, [key]: e.target.value });
 
-  // TODO: the date inputs allow past dates - set a `min` attribute (see issue tracker).
+  // today's date in YYYY-MM-DD format (local timezone)
+  const todayISO = new Date().toLocaleDateString('en-CA'); // 'en-CA' gives YYYY-MM-DD
+
+  // minimum check-out is the day after check-in
+  const minCheckOut = form.checkIn
+    ? new Date(new Date(form.checkIn).getTime() + 24 * 60 * 60 * 1000).toLocaleDateString('en-CA')
+    : todayISO;
+
   const book = async (e) => {
     e.preventDefault();
     if (!user) return navigate('/login', { state: { from: `/stays/${listing._id}` } });
@@ -44,11 +51,11 @@ export default function BookingBox({ listing }) {
       <div className="row">
         <label className="grow">
           Check-in
-          <input type="date" required value={form.checkIn} onChange={set('checkIn')} />
+          <input type="date" required value={form.checkIn} onChange={set('checkIn')} min={todayISO} />
         </label>
         <label className="grow">
           Check-out
-          <input type="date" required value={form.checkOut} onChange={set('checkOut')} />
+          <input type="date" required value={form.checkOut} onChange={set('checkOut')} min={minCheckOut} />
         </label>
       </div>
       <label>
