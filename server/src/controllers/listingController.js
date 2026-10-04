@@ -69,8 +69,20 @@ export const updateListing = asyncHandler(async (req, res) => {
 // DELETE /api/listings/:id (owner host)
 export const deleteListing = asyncHandler(async (req, res) => {
   const listing = await findOwnedListing(req, res);
-  await listing.deleteOne();
-  // TODO: what should happen to existing bookings and reviews? See issue tracker.
+
+  const upcomingBooking = await Booking.exists({
+    listing: listing._id,
+    status: { $in: ['pending', 'confirmed'] },
+    checkIn: { $gte: new Date() },
+  });
+
+  if (upcomingBooking) {
+    res.status(400);
+    throw new Error('Cannot delete a listing with upcoming bookings');
+  }
+
+  listing.isActive = false;
+  await listing.save();
   res.json({ message: 'Listing deleted' });
 });
 
