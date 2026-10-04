@@ -22,6 +22,7 @@ export const createBooking = asyncHandler(async (req, res) => {
     res.status(400);
     throw new Error('Check-out must be at least one day after check-in');
   }
+
   // TODO: reject check-in dates in the past.
 
   if (guests > listing.maxGuests) {
@@ -34,8 +35,18 @@ export const createBooking = asyncHandler(async (req, res) => {
     throw new Error('You cannot book your own listing');
   }
 
-  // BUG: there is no check for overlapping bookings, so the same
-  // dates can be booked twice. See "Prevent double booking" issue.
+  // Check for overlapping bookings
+  const overlappingBooking = await Booking.findOne({
+    listing: listing._id,
+    status: { $ne: 'cancelled' },
+    checkIn: { $lt: end },
+    checkOut: { $gt: start }
+  });
+
+  if (overlappingBooking) {
+    res.status(400);
+    throw new Error('This listing is already booked for the selected dates');
+}
 
   const booking = await Booking.create({
     listing: listing._id,
@@ -61,50 +72,68 @@ export const getMyBookings = asyncHandler(async (req, res) => {
 // GET /api/bookings/host (bookings on my listings)
 export const getHostBookings = asyncHandler(async (req, res) => {
   const myListings = await Listing.find({ host: req.user._id }).select('_id');
-  const bookings = await Booking.find({ listing: { $in: myListings.map((l) => l._id) } })
+
+  const bookings = await Booking.find({
+    listing: { $in: myListings.map((l) => l._id) }
+  })
     .populate('listing', 'title city')
     .populate('guest', 'name email')
     .sort({ checkIn: 1 });
+
   res.json(bookings);
 });
 
 // PATCH /api/bookings/:id/cancel (guest)
 export const cancelBooking = asyncHandler(async (req, res) => {
   const booking = await Booking.findById(req.params.id);
+
   if (!booking) {
     res.status(404);
     throw new Error('Booking not found');
   }
+
   if (!booking.guest.equals(req.user._id)) {
     res.status(403);
     throw new Error('Not your booking');
   }
+
   if (['cancelled', 'completed'].includes(booking.status)) {
     res.status(400);
     throw new Error(`Booking is already ${booking.status}`);
   }
+
   booking.status = 'cancelled';
   await booking.save();
+
   res.json(booking);
 });
 
 // PATCH /api/bookings/:id/status (host of the listing)
 export const updateBookingStatus = asyncHandler(async (req, res) => {
   const { status } = req.body;
-  const booking = await Booking.findById(req.params.id).populate('listing', 'host');
+
+  const booking = await Booking.findById(req.params.id).populate(
+    'listing',
+    'host'
+  );
+
   if (!booking) {
     res.status(404);
     throw new Error('Booking not found');
   }
+
   if (!booking.listing.host.equals(req.user._id)) {
     res.status(403);
     throw new Error('Not a booking on your listing');
   }
+
   if (!['confirmed', 'cancelled', 'completed'].includes(status)) {
     res.status(400);
     throw new Error('Invalid status');
   }
+
   booking.status = status;
   await booking.save();
+
   res.json(booking);
 });
