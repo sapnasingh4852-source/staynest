@@ -7,13 +7,19 @@ import { formatDate, formatINR } from '../../utils/format.js';
 export default function HostDashboard() {
   const [listings, setListings] = useState(null);
   const [bookings, setBookings] = useState([]);
+  const [stats, setStats] = useState(null);
   const [error, setError] = useState('');
 
   const load = () => {
-    Promise.all([api.get('/listings/mine'), api.get('/bookings/host')])
-      .then(([l, b]) => {
+    Promise.all([
+      api.get('/listings/mine'),
+      api.get('/bookings/host'),
+      api.get('/bookings/host/stats'),
+    ])
+      .then(([l, b, s]) => {
         setListings(l.data);
         setBookings(b.data);
+        setStats(s.data);
       })
       .catch((err) => setError(getErrorMessage(err)));
   };
@@ -36,13 +42,33 @@ export default function HostDashboard() {
   if (error) return <p className="error">{error}</p>;
   if (!listings) return <Loader />;
 
-  // TODO: earnings summary cards (total earnings, upcoming check-ins, occupancy).
   return (
     <section>
       <div className="row-between">
         <h1>Host Dashboard</h1>
         <Link to="/host/listings/new" className="btn">+ New listing</Link>
       </div>
+
+      {stats && (
+        <div className="stats">
+          <div className="card stat">
+            <span className="muted small">Total earnings</span>
+            <strong>{formatINR(stats.totalEarnings)}</strong>
+          </div>
+          <div className="card stat">
+            <span className="muted small">Check-ins next 7 days</span>
+            <strong>{stats.upcomingCheckIns}</strong>
+          </div>
+          <div className="card stat">
+            <span className="muted small">Pending requests</span>
+            <strong>{stats.pendingRequests}</strong>
+          </div>
+          <div className="card stat">
+            <span className="muted small">Average rating</span>
+            <strong>{stats.averageRating ? `★ ${stats.averageRating}` : '—'}</strong>
+          </div>
+        </div>
+      )}
 
       <h2>Booking requests</h2>
       {bookings.length === 0 && <p className="muted">No bookings yet.</p>}
